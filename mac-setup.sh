@@ -2,7 +2,7 @@
 
 # Copied bits and pieces from donnemartin/dev-setup, the stuff I need to get up and running on a new mac
 # To Execute, run: 
-# sh -c "$(curl -fsSL https://raw.githubusercontent.com/dangrund/setup-scripts/master/mac-setup.sh)"
+# sh -c "$(curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/mac-setup.sh)"
 
 # Ask for the administrator password, required to run a few of the installs
 sudo -v
