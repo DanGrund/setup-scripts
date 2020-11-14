@@ -140,11 +140,12 @@ brew cask install --appdir="/Applications" sketchup
 brew cask install --appdir="/Applications" spotify
 
 # Useful Binaries
-brew install speedtest_cli
-brew install nmap
-brew install wget
+brew cask install rectangle     # window management utility, https://github.com/rxhanson/Rectangle
+brew install speedtest_cli      # ookla in your CLI, so you can always complain about comcast
+brew install nmap               # diagnose network connections
+brew install wget               # downloads
 
-# CTF tools
+# CTF tools, for when you want to get your Mr. Robot on
 # brew install aircrack-ng
 # brew install bfg
 # brew install binutils
