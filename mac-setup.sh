@@ -2,7 +2,7 @@
 
 # Copied bits and pieces from donnemartin/dev-setup, the stuff I need to get up and running on a new mac
 # To Execute, run: 
-# sh -c "$(curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/mac-setup.sh)"
+# curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/mac-setup.sh | sh
 
 # Ask for the administrator password, required to run a few of the installs
 sudo -v
@@ -13,14 +13,6 @@ while true; do
     sleep 60
     kill -0 "$$" || exit
 done 2>/dev/null &
-
-# Update the OS and Install Xcode Tools
-echo "------------------------------"
-echo "Updating OSX.  If this requires a restart, run the script again."
-# Install all available updates
-sudo softwareupdate -ia --verbose
-# Install only recommended available updates
-#sudo softwareupdate -ir --verbose
 
 echo "------------------------------"
 echo "Installing Xcode Command Line Tools."
