@@ -76,8 +76,6 @@ brew cask install iterm2
 # Install oh-my-zsh
 echo "Installing oh-my-zsh..."
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
-echo "Need to logout now to start the new SHELL..."
-logout
 
 # Install Git
 if test ! $(which git); then
@@ -107,7 +105,7 @@ fi
 
 # Install vim
 echo "Installing vim..."
-brew install vim --override-system-vi
+brew install vim
 
 # Install Powerline fonts: all sorts of handy typefaces 
 echo "Installing Powerline fonts..."
