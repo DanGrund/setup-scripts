@@ -140,9 +140,9 @@ brew cask install --appdir="/Applications" sketchup
 brew cask install --appdir="/Applications" spotify
 
 # Useful Binaries
-# brew install speedtest_cli
+brew install speedtest_cli
 brew install nmap
-brew install wget --with-iri
+brew install wget
 
 # CTF tools
 # brew install aircrack-ng
