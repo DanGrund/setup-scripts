@@ -115,6 +115,9 @@ sh -c ./install.sh
 cd ..
 rm -rf fonts
 
+brew tap homebrew/cask-fonts
+brew cask install font-fira-code
+
 # Development Apps
 brew install node
 brew cask install --appdir="/Applications" visual-studio-code
