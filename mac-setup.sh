@@ -23,31 +23,13 @@ xcode-select --install
 echo "------------------------------"
 echo "Updating system prefrences"
 
-chflags nohidden ~/Library                                                          # Show Library Folder in Finder
-defaults write com.apple.finder AppleShowAllFiles YES                               # Show Hidden Files in Finder
-defaults write com.apple.finder ShowPathbar -bool true                              # Show Path Bar in Finder
-defaults write com.apple.finder ShowStatusBar -bool true                            # Show Status Bar in Finder
-sudo systemsetup -setcomputersleep Off > /dev/null                                  # Never go into computer sleep mode
 defaults write com.apple.BluetoothAudioAgent "Apple Bitpool Min (editable)" -int 40 # Increase sound quality for Bluetooth headphones/headsets
 defaults write NSGlobalDomain AppleKeyboardUIMode -int 3                            # Enable keyboard access for all controls (e.g. enable Tab in modal dialogs)
-defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false                  # Disable press-and-hold for keys in favor of key repeat
 defaults write com.apple.screencapture type -string "png"                           # Save screenshots in PNG format (other options: BMP, GIF, JPG, PDF, TIFF)
 defaults write com.apple.screencapture disable-shadow -bool true                    # Disable shadow in screenshots
 defaults write NSGlobalDomain AppleFontSmoothing -int 2                             # Enable subpixel font rendering on non-Apple LCDs
-chflags nohidden ~/Library                                                          # Show the ~/Library folder
-
-# Set a blazingly fast keyboard repeat rate
-defaults write NSGlobalDomain KeyRepeat -int 1
-defaults write NSGlobalDomain InitialKeyRepeat -int 15
-
-# Disable Notification Center and remove the menu bar icon
-# launchctl unload -w /System/Library/LaunchAgents/com.apple.notificationcenterui.plist 2> /dev/null 
-
-# Enable HiDPI display modes (requires restart)
-# sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool true
 
 echo "------------------------------"
-
 
 # Check for Homebrew, and then install it
 if test ! $(which brew); then
@@ -107,7 +89,7 @@ fi
 echo "Installing vim..."
 brew install vim
 
-# Install Powerline fonts: all sorts of handy typefaces 
+# Install Powerline fonts: needed for the powerline theming in OhMyZSH
 echo "Installing Powerline fonts..."
 git clone https://github.com/powerline/fonts.git
 cd fonts
@@ -115,6 +97,7 @@ sh -c ./install.sh
 cd ..
 rm -rf fonts
 
+# Install firaCode, handy ligature-enabled monospaced type for your IDE
 brew tap homebrew/cask-fonts
 brew cask install font-fira-code
 
@@ -137,6 +120,7 @@ brew cask install --appdir="/Applications" lastpass
 brew cask install --appdir="/Applications" caffeine
 brew cask install --appdir="/Applications" notion
 brew cask install --appdir="/Applications" sketch
+brew cask install --appdir="/Applications" rectangle
 
 # Other Stuff
 brew cask install --appdir="/Applications" sketchup
