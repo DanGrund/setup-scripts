@@ -72,6 +72,7 @@ fi
 
 git config --global user.name "Dan Grund"
 git config --global user.email "hello@dangrund.com"
+git config --global pager.branch false
 
 # Install Python
 echo "Installing python..."
