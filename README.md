@@ -8,5 +8,6 @@
     - add the following to plugins:
         - `zsh-syntax-highlighting`
         - `zsh-autosuggestions`
-- git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-- git clone https://github.com/zsh-users/zsh-autosuggestions $ZSH_CUSTOM/plugins/zsh-autosuggestions
+
+- in iterm2 preferences, go to profiles->text and update the font to any of the powerline typefaces for the agnoster theme to work
+- in vs code settings, update the typeface to Fira Code, and enable ligatures
