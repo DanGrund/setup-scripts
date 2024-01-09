@@ -23,23 +23,24 @@ xcode-select --install
 echo "------------------------------"
 echo "Updating system prefrences"
 
-defaults write com.apple.BluetoothAudioAgent "Apple Bitpool Min (editable)" -int 40 # Increase sound quality for Bluetooth headphones/headsets
-defaults write NSGlobalDomain AppleKeyboardUIMode -int 3                            # Enable keyboard access for all controls (e.g. enable Tab in modal dialogs)
+#defaults write com.apple.BluetoothAudioAgent "Apple Bitpool Min (editable)" -int 40 # Increase sound quality for Bluetooth headphones/headsets
+#defaults write NSGlobalDomain AppleKeyboardUIMode -int 3                            # Enable keyboard access for all controls (e.g. enable Tab in modal dialogs)
 defaults write com.apple.screencapture type -string "png"                           # Save screenshots in PNG format (other options: BMP, GIF, JPG, PDF, TIFF)
 defaults write com.apple.screencapture disable-shadow -bool true                    # Disable shadow in screenshots
-defaults write NSGlobalDomain AppleFontSmoothing -int 2                             # Enable subpixel font rendering on non-Apple LCDs
+#defaults write NSGlobalDomain AppleFontSmoothing -int 2                             # Enable subpixel font rendering on non-Apple LCDs
 
 echo "------------------------------"
 
 # Check for Homebrew, and then install it
 if test ! $(which brew); then
     echo "Installing homebrew..."
-    ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-    echo "Homebrew installed successfully"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+echo "Homebrew installed successfully"
 else
     echo "Homebrew already installed!"
 fi
-
+(echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> /Users/dangrund/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
 brew config
 
 # Updating Homebrew.
@@ -52,7 +53,10 @@ brew upgrade
 
 # Install iTerm2
 echo "Installing iTerm2..."
-brew cask install iterm2
+brew install iterm2 --cask
+
+echo "Installing TMUX..."
+brew install tmux
 
 # Update the Terminal
 # Install oh-my-zsh
@@ -77,7 +81,6 @@ git config --global pager.branch false
 # Install Python
 echo "Installing python..."
 brew install python
-brew install python3
 
 # Install ruby
 if test ! $(which ruby); then
@@ -103,35 +106,31 @@ rm -rf fonts
 
 # Install firaCode, handy ligature-enabled monospaced type for your IDE
 brew tap homebrew/cask-fonts
-brew cask install font-fira-code
+brew install font-fira-code --cask
 
 # Development Apps
 brew install node
-brew cask install --appdir="/Applications" visual-studio-code
-brew cask install --appdir="/Applications" webstorm
-brew cask install --appdir="/Applications" dbeaver-community
-brew cask install --appdir="/Applications" docker
-brew cask install --appdir="/Applications" postman
-brew cask install --appdir="/Applications" pgadmin4
+brew install --appdir="/Applications" visual-studio-code --cask
+brew install --appdir="/Applications" webstorm --cask
+brew install --appdir="/Applications" dbeaver-community --cask
+brew install --appdir="/Applications" docker --cask
+brew install --appdir="/Applications" postman --cask
+brew install --appdir="/Applications" pgadmin4 --cask
 brew install libpq
 
 # Productivity Apps
-brew cask install --appdir="/Applications" firefox
-brew cask install --appdir="/Applications" google-chrome
-brew cask install --appdir="/Applications" slack
-brew cask install --appdir="/Applications" discord
-brew cask install --appdir="/Applications" lastpass
-brew cask install --appdir="/Applications" caffeine
-brew cask install --appdir="/Applications" notion
-brew cask install --appdir="/Applications" sketch
-brew cask install --appdir="/Applications" rectangle
+brew install --appdir="/Applications" firefox --cask
+brew install --appdir="/Applications" google-chrome --cask
+brew install --appdir="/Applications" slack --cask
+brew install --appdir="/Applications" discord --cask
+brew install --appdir="/Applications" notion --cask
+brew install --appdir="/Applications" rectangle --cask
 
 # Other Stuff
-brew cask install --appdir="/Applications" sketchup
-brew cask install --appdir="/Applications" spotify
+# brew cask install --appdir="/Applications" sketchup
+brew install --appdir="/Applications" spotify --cask
 
 # Useful Binaries
-brew cask install rectangle     # window management utility, https://github.com/rxhanson/Rectangle
 brew install speedtest_cli      # ookla in your CLI, so you can always complain about comcast
 brew install nmap               # diagnose network connections
 brew install wget               # downloads
