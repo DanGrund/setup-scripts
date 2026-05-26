@@ -175,6 +175,7 @@ brew install --cask spotify
 brew install speedtest-cli      # ookla in your CLI, so you can always complain about comcast
 #brew install nmap               # diagnose network connections
 brew install wget               # downloads
+brew install imagemagick         # image processing (includes webp support)
 
 # CTF tools, for when you want to get your Mr. Robot on
 # brew install aircrack-ng
@@ -200,6 +201,42 @@ brew install wget               # downloads
 # brew install tcptrace
 # brew install ucspi-tcp # `tcpserver` etc.
 # brew install xz
+
+# Claude Code Configuration
+echo "------------------------------"
+echo "Setting up Claude Code..."
+
+CLAUDE_DIR="$HOME/.claude"
+SETUP_REPO="$HOME/setup-scripts"
+
+# Clone the setup repo to get config files
+if [ ! -d "$SETUP_REPO" ]; then
+    git clone https://github.com/DanGrund/setup-scripts.git "$SETUP_REPO"
+fi
+
+# Copy base settings (won't overwrite if already customized)
+if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
+    cp "$SETUP_REPO/claude/settings.json" "$CLAUDE_DIR/settings.json"
+    echo "Claude Code settings installed."
+else
+    echo "Claude Code settings already exist, skipping."
+fi
+
+# Copy custom agents
+mkdir -p "$CLAUDE_DIR/agents"
+cp -n "$SETUP_REPO/claude/agents/"*.md "$CLAUDE_DIR/agents/" 2>/dev/null
+echo "Custom agents installed."
+
+# Install plugins
+echo "Installing Claude Code plugins..."
+claude plugins install superpowers@claude-plugins-official 2>/dev/null
+claude plugins install frontend-design@claude-plugins-official 2>/dev/null
+claude plugins install feature-dev@claude-plugins-official 2>/dev/null
+claude plugins install code-simplifier@claude-plugins-official 2>/dev/null
+claude plugins install playground@claude-plugins-official 2>/dev/null
+claude plugins install ralph-loop@claude-plugins-official 2>/dev/null
+claude plugins install compound-engineering@compound-engineering-plugin 2>/dev/null
+echo "Claude Code plugins installed."
 
 # Remove outdated versions from the cellar.
 echo "Running brew cleanup..."
