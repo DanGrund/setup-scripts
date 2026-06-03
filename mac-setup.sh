@@ -2,7 +2,8 @@
 
 # Copied bits and pieces from donnemartin/dev-setup, the stuff I need to get up and running on a new mac
 # To Execute, run:
-# curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/mac-setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/mac-setup.sh -o mac-setup.sh && bash mac-setup.sh
+# (download-then-run is required because the interactive prompts need a real TTY)
 
 # Ask for the administrator password, required to run a few of the installs
 sudo -v
@@ -63,7 +64,73 @@ brew update
 echo "Upgrading Homebrew..."
 brew upgrade
 
-# Install iTerm2
+# Install gum (Charmbracelet) so we can show interactive prompts for the rest.
+if ! command -v gum &>/dev/null; then
+    echo "Installing gum..."
+    brew install gum
+fi
+
+# select_and_install <header> <pkg|y|n>...
+# Items prefixed with "cask:" install via --cask. The y/n flag sets whether
+# the item is pre-checked. Output of gum (one selected item per line) is
+# piped through brew install.
+select_and_install() {
+    local header="$1"; shift
+    local options=() defaults=()
+    local item pkg def
+    for item in "$@"; do
+        pkg="${item%|*}"
+        def="${item##*|}"
+        options+=("$pkg")
+        [ "$def" = "y" ] && defaults+=("$pkg")
+    done
+
+    local selected_flag=()
+    if [ ${#defaults[@]} -gt 0 ]; then
+        local joined
+        joined=$(IFS=','; echo "${defaults[*]}")
+        selected_flag=(--selected="$joined")
+    fi
+
+    local chosen
+    chosen=$(gum choose --no-limit --height 20 --header "$header" \
+        "${selected_flag[@]}" "${options[@]}" < /dev/tty)
+
+    while IFS= read -r pkg; do
+        [ -z "$pkg" ] && continue
+        if [[ "$pkg" == cask:* ]]; then
+            brew install --cask "${pkg#cask:}"
+        else
+            brew install "$pkg"
+        fi
+    done <<< "$chosen"
+}
+
+# select_list <header> <item|y|n>...
+# Generic multi-select that just echoes the chosen items (one per line).
+select_list() {
+    local header="$1"; shift
+    local options=() defaults=()
+    local item label def
+    for item in "$@"; do
+        label="${item%|*}"
+        def="${item##*|}"
+        options+=("$label")
+        [ "$def" = "y" ] && defaults+=("$label")
+    done
+
+    local selected_flag=()
+    if [ ${#defaults[@]} -gt 0 ]; then
+        local joined
+        joined=$(IFS=','; echo "${defaults[*]}")
+        selected_flag=(--selected="$joined")
+    fi
+
+    gum choose --no-limit --height 20 --header "$header" \
+        "${selected_flag[@]}" "${options[@]}" < /dev/tty
+}
+
+# Terminal essentials (always installed)
 echo "Installing iTerm2..."
 brew install --cask iterm2
 
@@ -107,136 +174,171 @@ if [ ! -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]
     git clone https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
 fi
 
-# Install Python
-echo "Installing python..."
-brew install python
+# Languages
+LANGS=$(select_list "Languages" \
+    "python|y" \
+    "ruby|y")
 
-# Install ruby
-if ! command -v ruby &>/dev/null || [ "$(which ruby)" = "/usr/bin/ruby" ]; then
-    echo "Installing Ruby..."
-    brew install ruby
-    echo "Adding the brew ruby path to shell config..."
-    if ! grep -q 'ruby/bin' "$HOME/.zprofile" 2>/dev/null; then
-        echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> "$HOME/.zprofile"
-    fi
-else
-    echo "Ruby already installed!"
+if echo "$LANGS" | grep -qx python; then
+    echo "Installing python..."
+    brew install python
 fi
 
-# Install vim
-#echo "Installing vim..."
-#brew install vim
+if echo "$LANGS" | grep -qx ruby; then
+    if ! command -v ruby &>/dev/null || [ "$(which ruby)" = "/usr/bin/ruby" ]; then
+        echo "Installing Ruby..."
+        brew install ruby
+        echo "Adding the brew ruby path to shell config..."
+        if ! grep -q 'ruby/bin' "$HOME/.zprofile" 2>/dev/null; then
+            echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> "$HOME/.zprofile"
+        fi
+    else
+        echo "Ruby already installed!"
+    fi
+fi
 
 # Install Powerline-compatible fonts via Homebrew (includes Fira Code + Powerline glyphs)
 echo "Installing Nerd Fonts (Fira Code)..."
 brew install --cask font-fira-code-nerd-font
 
 # Development Apps
-brew install node
-brew install lazygit
-brew install gh
-brew install jq
-brew install delta
-#brew install --cask visual-studio-code
-brew install --cask webstorm
-#brew install --cask dbeaver-community
-brew install --cask docker
-brew install --cask postman
-#brew install --cask pgadmin4
-#brew install libpq
+select_and_install "Development Apps" \
+    "node|y" \
+    "lazygit|y" \
+    "gh|y" \
+    "jq|y" \
+    "delta|y" \
+    "cask:visual-studio-code|n" \
+    "cask:webstorm|y" \
+    "cask:dbeaver-community|n" \
+    "cask:docker|y" \
+    "cask:postman|y" \
+    "cask:pgadmin4|n" \
+    "libpq|n"
 
 # AI Coding Tools
-echo "Installing Claude Code..."
-npm install -g @anthropic-ai/claude-code
+AI_TOOLS=$(select_list "AI Coding Tools" \
+    "Claude Code|y" \
+    "Codex CLI|y" \
+    "Superconductor (manual download)|y")
 
-echo "Installing Codex CLI..."
-npm install -g @openai/codex
+if echo "$AI_TOOLS" | grep -qx "Claude Code"; then
+    if command -v npm &>/dev/null; then
+        echo "Installing Claude Code..."
+        npm install -g @anthropic-ai/claude-code
+    else
+        echo "Skipping Claude Code: npm not installed (select 'node' in Development Apps)."
+    fi
+fi
 
-# Superconductor — parallel AI agent runner (no homebrew cask, download manually)
-echo "NOTE: Download Superconductor manually from https://super.engineering/"
+if echo "$AI_TOOLS" | grep -qx "Codex CLI"; then
+    if command -v npm &>/dev/null; then
+        echo "Installing Codex CLI..."
+        npm install -g @openai/codex
+    else
+        echo "Skipping Codex CLI: npm not installed (select 'node' in Development Apps)."
+    fi
+fi
+
+if echo "$AI_TOOLS" | grep -qx "Superconductor (manual download)"; then
+    echo "NOTE: Download Superconductor manually from https://super.engineering/"
+fi
 
 # Upload SSH key to GitHub (requires gh auth first)
-if [ -f "$HOME/.ssh/id_ed25519.pub" ]; then
-    echo "Authenticating with GitHub..."
-    gh auth login
-    gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$(hostname)"
+if [ -f "$HOME/.ssh/id_ed25519.pub" ] && command -v gh &>/dev/null; then
+    if gum confirm "Authenticate with GitHub and upload your SSH key now?" < /dev/tty; then
+        gh auth login
+        gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$(hostname)"
+    fi
 fi
 
 # Productivity Apps
-brew install --cask firefox
-#brew install --cask google-chrome
-brew install --cask slack
-#brew install --cask discord
-brew install --cask notion
-brew install --cask rectangle
-brew install --cask spotify
+select_and_install "Productivity Apps" \
+    "cask:firefox|y" \
+    "cask:google-chrome|n" \
+    "cask:slack|y" \
+    "cask:discord|n" \
+    "cask:notion|y" \
+    "cask:rectangle|y" \
+    "cask:spotify|y"
 
 # Useful Binaries
-brew install speedtest-cli      # ookla in your CLI, so you can always complain about comcast
-#brew install nmap               # diagnose network connections
-brew install wget               # downloads
-brew install imagemagick         # image processing (includes webp support)
+select_and_install "Useful Binaries" \
+    "speedtest-cli|y" \
+    "wget|y" \
+    "imagemagick|y" \
+    "nmap|n"
 
 # CTF tools, for when you want to get your Mr. Robot on
-# brew install aircrack-ng
-# brew install bfg
-# brew install binutils
-# brew install binwalk
-# brew install cifer
-# brew install dex2jar
-# brew install dns2tcp
-# brew install fcrackzip
-# brew install foremost
-# brew install hashpump
-# brew install hydra
-# brew install john
-# brew install knock
-# brew install netpbm
-# brew install nmap
-# brew install pngcheck
-# brew install socat
-# brew install sqlmap
-# brew install tcpflow
-# brew install tcpreplay
-# brew install tcptrace
-# brew install ucspi-tcp # `tcpserver` etc.
-# brew install xz
+if gum confirm "Install CTF / security tools?" --default=No < /dev/tty; then
+    select_and_install "CTF Tools" \
+        "aircrack-ng|n" \
+        "bfg|n" \
+        "binutils|n" \
+        "binwalk|n" \
+        "cifer|n" \
+        "dex2jar|n" \
+        "dns2tcp|n" \
+        "fcrackzip|n" \
+        "foremost|n" \
+        "hashpump|n" \
+        "hydra|n" \
+        "john|n" \
+        "knock|n" \
+        "netpbm|n" \
+        "pngcheck|n" \
+        "socat|n" \
+        "sqlmap|n" \
+        "tcpflow|n" \
+        "tcpreplay|n" \
+        "tcptrace|n" \
+        "ucspi-tcp|n" \
+        "xz|n"
+fi
 
 # Claude Code Configuration
-echo "------------------------------"
-echo "Setting up Claude Code..."
+if command -v claude &>/dev/null; then
+    echo "------------------------------"
+    echo "Setting up Claude Code..."
 
-CLAUDE_DIR="$HOME/.claude"
-SETUP_REPO="$HOME/setup-scripts"
+    CLAUDE_DIR="$HOME/.claude"
+    SETUP_REPO="$HOME/setup-scripts"
 
-# Clone the setup repo to get config files
-if [ ! -d "$SETUP_REPO" ]; then
-    git clone https://github.com/DanGrund/setup-scripts.git "$SETUP_REPO"
+    # Clone the setup repo to get config files
+    if [ ! -d "$SETUP_REPO" ]; then
+        git clone https://github.com/DanGrund/setup-scripts.git "$SETUP_REPO"
+    fi
+
+    # Copy base settings (won't overwrite if already customized)
+    if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
+        cp "$SETUP_REPO/claude/settings.json" "$CLAUDE_DIR/settings.json"
+        echo "Claude Code settings installed."
+    else
+        echo "Claude Code settings already exist, skipping."
+    fi
+
+    # Copy custom agents
+    mkdir -p "$CLAUDE_DIR/agents"
+    cp -n "$SETUP_REPO/claude/agents/"*.md "$CLAUDE_DIR/agents/" 2>/dev/null
+    echo "Custom agents installed."
+
+    # Install plugins (user-selectable)
+    PLUGINS=$(select_list "Claude Code Plugins" \
+        "superpowers@claude-plugins-official|y" \
+        "frontend-design@claude-plugins-official|y" \
+        "feature-dev@claude-plugins-official|y" \
+        "code-simplifier@claude-plugins-official|y" \
+        "playground@claude-plugins-official|y" \
+        "ralph-loop@claude-plugins-official|y" \
+        "compound-engineering@compound-engineering-plugin|y")
+
+    while IFS= read -r plugin; do
+        [ -z "$plugin" ] && continue
+        echo "Installing $plugin..."
+        claude plugins install "$plugin" 2>/dev/null
+    done <<< "$PLUGINS"
+    echo "Claude Code plugins installed."
 fi
-
-# Copy base settings (won't overwrite if already customized)
-if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
-    cp "$SETUP_REPO/claude/settings.json" "$CLAUDE_DIR/settings.json"
-    echo "Claude Code settings installed."
-else
-    echo "Claude Code settings already exist, skipping."
-fi
-
-# Copy custom agents
-mkdir -p "$CLAUDE_DIR/agents"
-cp -n "$SETUP_REPO/claude/agents/"*.md "$CLAUDE_DIR/agents/" 2>/dev/null
-echo "Custom agents installed."
-
-# Install plugins
-echo "Installing Claude Code plugins..."
-claude plugins install superpowers@claude-plugins-official 2>/dev/null
-claude plugins install frontend-design@claude-plugins-official 2>/dev/null
-claude plugins install feature-dev@claude-plugins-official 2>/dev/null
-claude plugins install code-simplifier@claude-plugins-official 2>/dev/null
-claude plugins install playground@claude-plugins-official 2>/dev/null
-claude plugins install ralph-loop@claude-plugins-official 2>/dev/null
-claude plugins install compound-engineering@compound-engineering-plugin 2>/dev/null
-echo "Claude Code plugins installed."
 
 # Remove outdated versions from the cellar.
 echo "Running brew cleanup..."
