@@ -19,6 +19,9 @@ for arg in "$@"; do
 done
 
 DRY_LOG=()
+FAILED_LOG=()
+XCODE_TIMEOUT_SECONDS=1800
+XCODE_POLL_SECONDS=5
 
 # run <cmd...> — execute a command, or log it instead in dry-run mode.
 run() {
@@ -27,7 +30,25 @@ run() {
         DRY_LOG+=("$*")
     else
         "$@"
+        local rc=$?
+        if [ "$rc" -ne 0 ]; then
+            echo "WARNING: command failed (exit $rc): $*" >&2
+            FAILED_LOG+=("exit $rc: $*")
+        fi
+        return "$rc"
     fi
+}
+
+# try_run <cmd...> — execute a command without adding failures to the final
+# summary. Use this only for expected fallback probes.
+try_run() {
+    if $DRY_RUN; then
+        echo "[dry-run] $*"
+        DRY_LOG+=("$*")
+        return 0
+    fi
+
+    "$@"
 }
 
 # plan <description> — log a non-command action (file append, merge, etc.)
@@ -35,6 +56,37 @@ run() {
 plan() {
     echo "[dry-run] $*"
     DRY_LOG+=("$*")
+}
+
+wait_for_xcode_cli_tools() {
+    local elapsed=0
+
+    echo "Waiting for Xcode Command Line Tools installation..."
+    until xcode-select -p &>/dev/null; do
+        if [ "$elapsed" -ge "$XCODE_TIMEOUT_SECONDS" ]; then
+            echo "Timed out waiting for Xcode Command Line Tools after $((XCODE_TIMEOUT_SECONDS / 60)) minutes." >&2
+            echo "Finish or restart the installer, then rerun this script." >&2
+            exit 1
+        fi
+
+        sleep "$XCODE_POLL_SECONDS"
+        elapsed=$((elapsed + XCODE_POLL_SECONDS))
+    done
+}
+
+print_failure_summary() {
+    local failure
+
+    if [ ${#FAILED_LOG[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    echo
+    echo "=== Setup completed with failed commands ==="
+    for failure in "${FAILED_LOG[@]}"; do
+        echo "  - $failure"
+    done
+    return 1
 }
 
 if $DRY_RUN; then
@@ -61,10 +113,7 @@ else
     echo "Installing Xcode Command Line Tools."
     if ! xcode-select -p &>/dev/null; then
         xcode-select --install
-        echo "Waiting for Xcode Command Line Tools installation..."
-        until xcode-select -p &>/dev/null; do
-            sleep 5
-        done
+        wait_for_xcode_cli_tools
     else
         echo "Xcode Command Line Tools already installed."
     fi
@@ -93,6 +142,7 @@ else
     fi
 
     if ! grep -q 'brew shellenv' "$HOME/.zprofile" 2>/dev/null; then
+        # shellcheck disable=SC2016
         (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> "$HOME/.zprofile"
     fi
     eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -100,16 +150,16 @@ else
 
     # Updating Homebrew.
     echo "Updating Homebrew..."
-    brew update
+    run brew update
 
     # Upgrade any already-installed formulae.
     echo "Upgrading Homebrew..."
-    brew upgrade
+    run brew upgrade
 
     # Install gum (Charmbracelet) so we can show interactive prompts for the rest.
     if ! command -v gum &>/dev/null; then
         echo "Installing gum..."
-        brew install gum
+        run brew install gum
     fi
 fi
 
@@ -134,6 +184,9 @@ confirm() {
 # post-install wiring ask "was this chosen?" even in dry-run mode where
 # nothing actually gets installed.
 SELECTED=()
+INSTALL_CASKS=()
+INSTALL_PIPX_PACKAGES=()
+INSTALL_GEMS=()
 
 # was_picked <name> — true if <name> is installed or was selected in a menu.
 was_picked() {
@@ -145,19 +198,69 @@ was_picked() {
     return 1
 }
 
+contains_item() {
+    local needle="$1"; shift
+    local item
+    for item in "$@"; do
+        [ "$item" = "$needle" ] && return 0
+    done
+    return 1
+}
+
+# install_pipx_package <package> — install via pipx, upgrading if the
+# package is already present.
+install_pipx_package() {
+    local package="$1"
+    try_run pipx install "$package" || run pipx upgrade "$package"
+}
+
+install_selected_package() {
+    local name="$1"
+
+    if contains_item "$name" "${INSTALL_CASKS[@]}"; then
+        run brew install --cask "$name"
+    elif contains_item "$name" "${INSTALL_PIPX_PACKAGES[@]}"; then
+        install_pipx_package "$name"
+    elif contains_item "$name" "${INSTALL_GEMS[@]}"; then
+        run gem install "$name"
+    else
+        run brew install "$name"
+    fi
+}
+
 # select_and_install <header> <pkg|y|n>...
-# Items prefixed with "cask:" install via --cask; the prefix is stripped
-# from the menu display. The y/n flag sets whether the item is pre-checked.
+# Items prefixed with "cask:", "pipx:", or "gem:" install through that
+# package manager; the prefix is stripped from the menu display. The y/n flag
+# sets whether the item is pre-checked.
 select_and_install() {
     local header="$1"; shift
-    local options=() defaults=() casks=()
+    local options=() defaults=()
     local item pkg def name
+    INSTALL_CASKS=()
+    INSTALL_PIPX_PACKAGES=()
+    INSTALL_GEMS=()
+
     for item in "$@"; do
         pkg="${item%|*}"
         def="${item##*|}"
-        name="${pkg#cask:}"
+        case "$pkg" in
+            cask:*)
+                name="${pkg#cask:}"
+                INSTALL_CASKS+=("$name")
+                ;;
+            pipx:*)
+                name="${pkg#pipx:}"
+                INSTALL_PIPX_PACKAGES+=("$name")
+                ;;
+            gem:*)
+                name="${pkg#gem:}"
+                INSTALL_GEMS+=("$name")
+                ;;
+            *)
+                name="$pkg"
+                ;;
+        esac
         options+=("$name")
-        [[ "$pkg" == cask:* ]] && casks+=("$name")
         [ "$def" = "y" ] && defaults+=("$name")
     done
 
@@ -169,16 +272,14 @@ select_and_install() {
     fi
 
     local chosen
-    chosen=$(gum choose --no-limit --height 20 --header "$header" \
+    chosen=$(gum choose --no-limit --height 20 \
+        --header "$header"$'\n'"x/space: toggle  enter: confirm  esc/ctrl+c: abort" \
         "${selected_flag[@]}" "${options[@]}" < /dev/tty) || abort
 
     while IFS= read -r name; do
         [ -z "$name" ] && continue
         SELECTED+=("$name")
-        case " ${casks[*]} " in
-            *" $name "*) run brew install --cask "$name" ;;
-            *)           run brew install "$name" ;;
-        esac
+        install_selected_package "$name"
     done <<< "$chosen"
 }
 
@@ -202,7 +303,8 @@ select_list() {
         selected_flag=(--selected="$joined")
     fi
 
-    gum choose --no-limit --height 20 --header "$header" \
+    gum choose --no-limit --height 20 \
+        --header "$header"$'\n'"x/space: toggle  enter: confirm  esc/ctrl+c: abort" \
         "${selected_flag[@]}" "${options[@]}" < /dev/tty
 }
 
@@ -245,7 +347,6 @@ select_and_install "Terminal & Shell" \
     "cask:iterm2|y" \
     "cask:ghostty|n" \
     "cask:warp|n" \
-    "cask:alacritty|n" \
     "tmux|y" \
     "zellij|n" \
     "vim|n" \
@@ -330,6 +431,7 @@ if was_picked starship && ! grep -q 'starship init' "$HOME/.zshrc" 2>/dev/null; 
     if $DRY_RUN; then
         plan "append starship init to ~/.zshrc"
     else
+        # shellcheck disable=SC2016
         echo 'eval "$(starship init zsh)"' >> "$HOME/.zshrc"
         echo "Added starship init to ~/.zshrc"
     fi
@@ -338,6 +440,7 @@ if was_picked zoxide && ! grep -q 'zoxide init' "$HOME/.zshrc" 2>/dev/null; then
     if $DRY_RUN; then
         plan "append zoxide init to ~/.zshrc"
     else
+        # shellcheck disable=SC2016
         echo 'eval "$(zoxide init zsh)"' >> "$HOME/.zshrc"
         echo "Added zoxide init to ~/.zshrc"
     fi
@@ -349,6 +452,7 @@ select_and_install "CLI Tools" \
     "lazygit|y" \
     "gh|y" \
     "jq|y" \
+    "shellcheck|y" \
     "delta|y" \
     "fzf|y" \
     "bat|y" \
@@ -357,37 +461,15 @@ select_and_install "CLI Tools" \
     "fd|y" \
     "btop|y" \
     "wget|y" \
-    "speedtest-cli|y" \
     "imagemagick|y" \
+    "xz|y" \
+    "bfg|n" \
     "nmap|n" \
     "libpq|n"
 
 # Use delta as git's pager only if it's actually installed (or just picked)
 if was_picked delta; then
     run git config --global core.pager delta
-fi
-
-# Aliases for the modern CLI replacements. The block self-guards with
-# `command -v`, so each alias only activates if the tool is installed —
-# safe to add once and forget. rg/fd flags differ from grep/find; remove
-# those lines from ~/.zshrc if the muscle memory mismatch bites.
-if was_picked bat || was_picked eza || was_picked ripgrep || was_picked fd || was_picked btop; then
-    if ! grep -q '# modern-cli-aliases' "$HOME/.zshrc" 2>/dev/null; then
-        if $DRY_RUN; then
-            plan "append modern-cli-aliases block (cat→bat, ls→eza, grep→rg, find→fd, top→btop) to ~/.zshrc"
-        else
-            cat >> "$HOME/.zshrc" <<'EOF'
-
-# modern-cli-aliases — added by setup script
-command -v bat &>/dev/null && alias cat='bat --paging=never'
-command -v eza &>/dev/null && alias ls='eza'
-command -v rg &>/dev/null && alias grep='rg'
-command -v fd &>/dev/null && alias find='fd'
-command -v btop &>/dev/null && alias top='btop'
-EOF
-            echo "Added modern CLI aliases to ~/.zshrc"
-        fi
-    fi
 fi
 
 # Languages & Runtimes
@@ -432,6 +514,9 @@ fi
 if echo "$LANGS" | grep -qx python; then
     echo "Installing python..."
     run brew install python
+    echo "Installing pipx..."
+    run brew install pipx
+    run pipx ensurepath
 fi
 
 if echo "$LANGS" | grep -qx uv; then
@@ -461,13 +546,22 @@ if echo "$LANGS" | grep -qx java; then
             plan "add brew openjdk to PATH in ~/.zprofile"
         else
             echo "Adding the brew openjdk path to shell config..."
+            # shellcheck disable=SC2016
             echo 'export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"' >> "$HOME/.zprofile"
         fi
     fi
 fi
 
 if echo "$LANGS" | grep -qx ruby; then
+    RUBY_BIN_PATH="/opt/homebrew/opt/ruby/bin"
+    USE_BREW_RUBY=false
+    if command -v brew &>/dev/null; then
+        BREW_RUBY_PREFIX="$(brew --prefix ruby 2>/dev/null)"
+        [ -n "$BREW_RUBY_PREFIX" ] && RUBY_BIN_PATH="$BREW_RUBY_PREFIX/bin"
+    fi
+
     if ! command -v ruby &>/dev/null || [ "$(which ruby)" = "/usr/bin/ruby" ]; then
+        USE_BREW_RUBY=true
         echo "Installing Ruby..."
         run brew install ruby
         if ! grep -q 'ruby/bin' "$HOME/.zprofile" 2>/dev/null; then
@@ -475,11 +569,15 @@ if echo "$LANGS" | grep -qx ruby; then
                 plan "add brew ruby to PATH in ~/.zprofile"
             else
                 echo "Adding the brew ruby path to shell config..."
-                echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> "$HOME/.zprofile"
+                echo "export PATH=\"$RUBY_BIN_PATH:\$PATH\"" >> "$HOME/.zprofile"
             fi
         fi
     else
         echo "Ruby already installed!"
+    fi
+
+    if $USE_BREW_RUBY && [ -d "$RUBY_BIN_PATH" ]; then
+        export PATH="$RUBY_BIN_PATH:$PATH"
     fi
 fi
 
@@ -590,7 +688,9 @@ select_and_install "Productivity Apps" \
     "cask:rectangle|y" \
     "cask:raycast|n" \
     "cask:1password|n" \
+    "cask:bitwarden|n" \
     "cask:figma|n" \
+    "cask:tailscale|n" \
     "cask:the-unarchiver|n" \
     "cask:appcleaner|n" \
     "cask:stats|n" \
@@ -599,29 +699,52 @@ select_and_install "Productivity Apps" \
 
 # CTF tools, for when you want to get your Mr. Robot on
 if confirm "Install CTF / security tools?" --default=No; then
-    select_and_install "CTF Tools" \
-        "aircrack-ng|n" \
-        "bfg|n" \
-        "binutils|n" \
-        "binwalk|n" \
-        "cifer|n" \
-        "dex2jar|n" \
-        "dns2tcp|n" \
-        "fcrackzip|n" \
-        "foremost|n" \
-        "hashpump|n" \
-        "hydra|n" \
-        "john|n" \
-        "knock|n" \
-        "netpbm|n" \
-        "pngcheck|n" \
-        "socat|n" \
-        "sqlmap|n" \
-        "tcpflow|n" \
-        "tcpreplay|n" \
-        "tcptrace|n" \
-        "ucspi-tcp|n" \
-        "xz|n"
+    CTF_TOOLS=(
+        "ghidra|n"
+        "radare2|n"
+        "binwalk|n"
+        "binutils|n"
+        "foremost|n"
+        "john|n"
+        "hashcat|n"
+        "fcrackzip|n"
+        "hydra|n"
+        "sqlmap|n"
+        "ffuf|n"
+        "gobuster|n"
+        "nikto|n"
+        "aircrack-ng|n"
+        "cask:wireshark|n"
+        "tcpflow|n"
+        "tcpreplay|n"
+        "socat|n"
+        "dns2tcp|n"
+        "pngcheck|n"
+    )
+
+    if echo "$LANGS" | grep -qx python; then
+        CTF_TOOLS+=(
+            "pipx:volatility3|n"
+            "pipx:ROPGadget|n"
+            "pipx:ropper|n"
+            "pipx:oletools|n"
+            "pipx:wafw00f|n"
+            "pipx:frida-tools|n"
+            "pipx:impacket|n"
+            "pipx:ciphey|n"
+            "pipx:pwncat-cs|n"
+        )
+    fi
+
+    if echo "$LANGS" | grep -qx ruby; then
+        CTF_TOOLS+=(
+            "gem:zsteg|n"
+            "gem:wpscan|n"
+            "gem:evil-winrm|n"
+        )
+    fi
+
+    select_and_install "CTF Tools" "${CTF_TOOLS[@]}"
 fi
 
 # Upload SSH key to GitHub (requires gh auth first)
@@ -647,6 +770,11 @@ if $DRY_RUN; then
 else
     # Remove outdated versions from the cellar.
     echo "Running brew cleanup..."
-    brew cleanup
-    echo "You're done!"
+    run brew cleanup
+
+    if print_failure_summary; then
+        echo "You're done!"
+    else
+        exit 1
+    fi
 fi
