@@ -1,20 +1,28 @@
 # setup-scripts
 
-Interactive setup for a new Apple Silicon Mac. The script uses [`gum`](https://github.com/charmbracelet/gum) for checkbox menus.
+interactive setup for a new macs (silicon only, not tested on intel sorry). 
+
+updated from my own config migration to a configurable, shareable setup script using [`gum`](https://github.com/charmbracelet/gum) for checkbox menus
 
 ## Usage
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/shareable-mac-setup.sh -o shareable-mac-setup.sh && bash shareable-mac-setup.sh
 ```
+don't pipe it into `bash`. the prompts need a real TTY.
 
-Do not pipe it into `bash`. The prompts need a real TTY.
+you can also fire a dry run if you install brew and gum first
 
-## What it does
+```sh
+brew install gum
+bash shareable-mac-setup.sh --dry-run
+```
 
-- Installs Xcode Command Line Tools, Homebrew, `gum`, git, and an SSH key.
+## What it do
+
+- Installs Xcode Command Line Tools, Homebrew, `gum`, git, and sets up your github SSH key.
 - Sets a few macOS defaults for screenshots, Dock autohide, and keyboard repeat.
-- Prompts for git identity, terminal tools, CLI tools, runtimes, dev apps, AI tools, productivity apps, media tools, and CTF/security tools.
+- Prompts for git identity, terminal tools, CLI tools, runtimes, dev apps, AI tools, productivity apps, "media archiving and discovery" apps, and a collection of defcon toys.
 - Can scaffold a Docker Compose media stack template without starting containers.
 - Merges selected oh-my-zsh plugins into `~/.zshrc`.
 - Adds starship and zoxide init lines when selected.

@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 
-# Shareable interactive mac setup — prompts for your identity and lets you pick what to install.
+# Shareable interactive mac setup
 # To Execute, run:
 #   curl -fsSL https://raw.githubusercontent.com/DanGrund/setup-scripts/main/shareable-mac-setup.sh -o shareable-mac-setup.sh && bash shareable-mac-setup.sh
 # (download-then-run is required because the interactive prompts need a real TTY)
 #
 # Options:
-#   --dry-run   Walk through every prompt without installing or configuring
-#               anything; prints a summary of what would have run.
-#               Requires gum to be installed already: brew install gum
+#   --dry-run   Walk through every prompt without installing or configuring anything;
 
 DRY_RUN=false
 for arg in "$@"; do
@@ -23,7 +21,7 @@ FAILED_LOG=()
 XCODE_TIMEOUT_SECONDS=1800
 XCODE_POLL_SECONDS=5
 
-# run <cmd...> — execute a command, or log it instead in dry-run mode.
+# run <cmd...> -- execute a command, or log it instead in dry-run mode.
 run() {
     if $DRY_RUN; then
         echo "[dry-run] $*"
@@ -39,7 +37,7 @@ run() {
     fi
 }
 
-# try_run <cmd...> — execute a command without adding failures to the final
+# try_run <cmd...> -- execute a command without adding failures to the final
 # summary. Use this only for expected fallback probes.
 try_run() {
     if $DRY_RUN; then
@@ -51,7 +49,7 @@ try_run() {
     "$@"
 }
 
-# plan <description> — log a non-command action (file append, merge, etc.)
+# plan <description> -- log a non-command action (file append, merge, etc.)
 # in dry-run mode. Only called from inside dry-run branches.
 plan() {
     echo "[dry-run] $*"
@@ -290,7 +288,7 @@ EOF
 }
 
 if $DRY_RUN; then
-    echo "=== DRY RUN — nothing will be installed or configured ==="
+    echo "=== DRY RUN -- nothing will be installed or configured ==="
     if ! command -v gum &>/dev/null; then
         echo "gum is required for the menus. Install it first: brew install gum" >&2
         exit 1
@@ -348,26 +346,21 @@ else
     eval "$(/opt/homebrew/bin/brew shellenv)"
     brew config
 
-    # Updating Homebrew.
     echo "Updating Homebrew..."
     run brew update
 
-    # Upgrade any already-installed formulae.
     echo "Upgrading Homebrew..."
     run brew upgrade
 
-    # Install gum (Charmbracelet) so we can show interactive prompts for the rest.
     if ! command -v gum &>/dev/null; then
         echo "Installing gum..."
         run brew install gum
     fi
 fi
 
-# Esc or Ctrl+C in any prompt aborts the whole script.
-# (Enter with nothing selected just skips that section.)
 abort() {
     echo
-    echo "Setup aborted — no further changes made."
+    echo "Setup aborted -- no further changes made."
     exit 130
 }
 
@@ -380,15 +373,12 @@ confirm() {
     return $rc
 }
 
-# Every package picked in any menu, with cask: prefixes stripped. Lets
-# post-install wiring ask "was this chosen?" even in dry-run mode where
-# nothing actually gets installed.
+# Every package picked in any menu, with cask: prefixes stripped.
 SELECTED=()
 INSTALL_CASKS=()
 INSTALL_PIPX_PACKAGES=()
 INSTALL_GEMS=()
 
-# was_picked <name> — true if <name> is installed or was selected in a menu.
 was_picked() {
     command -v "$1" &>/dev/null && return 0
     local p
@@ -407,8 +397,6 @@ contains_item() {
     return 1
 }
 
-# install_pipx_package <package> — install via pipx, upgrading if the
-# package is already present.
 install_pipx_package() {
     local package="$1"
     try_run pipx install "$package" || run pipx upgrade "$package"
@@ -428,10 +416,6 @@ install_selected_package() {
     fi
 }
 
-# select_and_install <header> <pkg|y|n>...
-# Items prefixed with "cask:", "pipx:", or "gem:" install through that
-# package manager; the prefix is stripped from the menu display. The y/n flag
-# sets whether the item is pre-checked.
 select_and_install() {
     local header="$1"; shift
     local options=() defaults=()
@@ -483,8 +467,6 @@ select_and_install() {
     done <<< "$chosen"
 }
 
-# select_list <header> <item|y|n>...
-# Generic multi-select that just echoes the chosen items (one per line).
 select_list() {
     local header="$1"; shift
     local options=() defaults=()
@@ -516,7 +498,6 @@ else
     echo "git already installed!"
 fi
 
-# Git identity — prompt for name and email (pre-filled with any existing config)
 GIT_NAME=$(gum input --header "Git user.name" \
     --value "$(git config --global user.name 2>/dev/null)" \
     --placeholder "Jane Doe" < /dev/tty) || abort
@@ -541,7 +522,6 @@ if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
     fi
 fi
 
-# Terminal & Shell — emulators, multiplexers, editors, prompt, font.
 # (font-fira-code-nerd-font is a Powerline-compatible Nerd Font.)
 select_and_install "Terminal & Shell" \
     "cask:iterm2|y" \
@@ -556,7 +536,6 @@ select_and_install "Terminal & Shell" \
     "zoxide|n" \
     "cask:font-fira-code-nerd-font|y"
 
-# oh-my-zsh — optional, with a pick-list of the most useful plugins.
 # zsh-syntax-highlighting is listed last on purpose: it must load last.
 if confirm "Improve your terminal with oh-my-zsh?"; then
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
@@ -591,7 +570,6 @@ if confirm "Improve your terminal with oh-my-zsh?"; then
         "zsh-syntax-highlighting|y") || abort
 
     # Third-party plugins need a git clone into the custom plugins dir;
-    # the rest ship with oh-my-zsh and only need enabling in .zshrc.
     for ext in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
         if echo "$OMZ_PLUGINS" | grep -qx "$ext" && [ ! -d "$ZSH_CUSTOM_DIR/plugins/$ext" ]; then
             run git clone "https://github.com/zsh-users/$ext.git" "$ZSH_CUSTOM_DIR/plugins/$ext"
@@ -611,7 +589,7 @@ if confirm "Improve your terminal with oh-my-zsh?"; then
             esac
         done
         MERGED="${MERGED# }"
-        # zsh-syntax-highlighting must load last — move it to the end if present
+        # zsh-syntax-highlighting must load last -- move it to the end if present
         if [[ " $MERGED " == *" zsh-syntax-highlighting "* ]]; then
             MERGED=$(echo "$MERGED" | sed 's/zsh-syntax-highlighting//; s/  */ /g; s/^ *//; s/ *$//')
             MERGED="$MERGED zsh-syntax-highlighting"
@@ -646,8 +624,7 @@ if was_picked zoxide && ! grep -q 'zoxide init' "$HOME/.zshrc" 2>/dev/null; then
     fi
 fi
 
-# CLI Tools — command-line utilities (includes the old "Useful Binaries")
-# bat/eza/ripgrep/fd/btop are modern replacements for cat/ls/grep/find/top.
+# CLI Tools -- command-line utilities (includes the old "Useful Binaries")
 select_and_install "CLI Tools" \
     "lazygit|y" \
     "gh|y" \
@@ -782,10 +759,6 @@ if echo "$LANGS" | grep -qx ruby; then
 fi
 
 # Development Apps (GUI)
-# jetbrains-toolbox manages the whole JetBrains/IntelliJ family (WebStorm,
-# IDEA, etc.) with shared installs and updates.
-# orbstack is a faster, lighter Docker Desktop replacement (free for
-# personal use) — pick it or docker, not both.
 select_and_install "Development Apps" \
     "cask:visual-studio-code|y" \
     "cask:cursor|n" \
@@ -812,7 +785,7 @@ AI_TOOLS=$(select_list "AI Coding Tools" \
     "Superconductor (manual download)|n" \
     "Conductor (manual download)|n") || abort
 
-# install_ai_tool <menu label> <npm package> — installs if selected above
+# install_ai_tool <menu label> <npm package> -- installs if selected above
 install_ai_tool() {
     local label="$1" pkg="$2"
     if echo "$AI_TOOLS" | grep -qx "$label"; then
@@ -840,7 +813,7 @@ if echo "$AI_TOOLS" | grep -qx "Conductor (manual download)"; then
     echo "NOTE: Download Conductor manually from https://conductor.build/"
 fi
 
-# Claude Code Plugins — only when Claude Code was selected above
+# Claude Code Plugins -- only when Claude Code was selected above
 if echo "$AI_TOOLS" | grep -qx "Claude Code" && { command -v claude &>/dev/null || $DRY_RUN; }; then
     echo "------------------------------"
     echo "Setting up Claude Code plugins..."
@@ -897,7 +870,7 @@ select_and_install "Productivity Apps" \
     "cask:vlc|n" \
     "cask:spotify|y"
 
-# Media archival, discovery, and sharing
+# Media archival, discovery, and sharing -- not for pirating copyrighted material
 if confirm "Install media archival / discovery / sharing tools?" --default=No; then
     select_and_install "Media Tools" \
         "cask:mullvad-vpn|n" \
@@ -982,14 +955,13 @@ fi
 
 if $DRY_RUN; then
     echo
-    echo "=== Dry run complete — would have run: ==="
+    echo "=== Dry run complete -- would have run: ==="
     if [ ${#DRY_LOG[@]} -eq 0 ]; then
         echo "(nothing selected)"
     else
         printf '  %s\n' "${DRY_LOG[@]}"
     fi
 else
-    # Remove outdated versions from the cellar.
     echo "Running brew cleanup..."
     run brew cleanup
 
