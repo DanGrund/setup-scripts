@@ -542,35 +542,10 @@ if echo "$AI_TOOLS" | grep -qx "Conductor (manual download)"; then
     echo "NOTE: Download Conductor manually from https://conductor.build/"
 fi
 
-# Claude Code Configuration — only when Claude Code was selected above
+# Claude Code Plugins — only when Claude Code was selected above
 if echo "$AI_TOOLS" | grep -qx "Claude Code" && { command -v claude &>/dev/null || $DRY_RUN; }; then
     echo "------------------------------"
-    echo "Setting up Claude Code..."
-
-    CLAUDE_DIR="$HOME/.claude"
-    SETUP_REPO="$HOME/setup-scripts"
-
-    if $DRY_RUN; then
-        plan "clone setup-scripts repo and copy claude settings + agents to ~/.claude"
-    else
-        # Clone the setup repo to get config files
-        if [ ! -d "$SETUP_REPO" ]; then
-            git clone https://github.com/DanGrund/setup-scripts.git "$SETUP_REPO"
-        fi
-
-        # Copy base settings (won't overwrite if already customized)
-        if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
-            cp "$SETUP_REPO/claude/settings.json" "$CLAUDE_DIR/settings.json"
-            echo "Claude Code settings installed."
-        else
-            echo "Claude Code settings already exist, skipping."
-        fi
-
-        # Copy custom agents
-        mkdir -p "$CLAUDE_DIR/agents"
-        cp -n "$SETUP_REPO/claude/agents/"*.md "$CLAUDE_DIR/agents/" 2>/dev/null
-        echo "Custom agents installed."
-    fi
+    echo "Setting up Claude Code plugins..."
 
     # Install plugins (user-selectable)
     PLUGINS=$(select_list "Claude Code Plugins" \
