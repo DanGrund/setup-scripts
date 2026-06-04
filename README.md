@@ -14,7 +14,8 @@ Do not pipe it into `bash`. The prompts need a real TTY.
 
 - Installs Xcode Command Line Tools, Homebrew, `gum`, git, and an SSH key.
 - Sets a few macOS defaults for screenshots, Dock autohide, and keyboard repeat.
-- Prompts for git identity, terminal tools, CLI tools, runtimes, dev apps, AI tools, productivity apps, and CTF/security tools.
+- Prompts for git identity, terminal tools, CLI tools, runtimes, dev apps, AI tools, productivity apps, media tools, and CTF/security tools.
+- Can scaffold a Docker Compose media stack template without starting containers.
 - Merges selected oh-my-zsh plugins into `~/.zshrc`.
 - Adds starship and zoxide init lines when selected.
 - Sets delta as the git pager when selected.

@@ -89,6 +89,206 @@ print_failure_summary() {
     return 1
 }
 
+write_file_if_missing() {
+    local path="$1"
+
+    if [ -e "$path" ]; then
+        echo "Skipping existing file: $path"
+        cat >/dev/null
+        return 0
+    fi
+
+    if cat > "$path"; then
+        echo "Created $path"
+    else
+        echo "WARNING: failed to write $path" >&2
+        FAILED_LOG+=("failed to write $path")
+        return 1
+    fi
+}
+
+create_media_stack_template() {
+    local stack_dir="$HOME/media-stack"
+    local config_dir="$stack_dir/config"
+    local service
+    local services=(
+        prowlarr
+        sonarr
+        radarr
+        lidarr
+        bazarr
+        qbittorrent
+        sabnzbd
+        tautulli
+        overseerr
+        jellyseerr
+        jellyfin
+    )
+
+    if $DRY_RUN; then
+        plan "create Docker media stack template under $stack_dir"
+        return
+    fi
+
+    if ! run mkdir -p "$config_dir"; then
+        return
+    fi
+
+    for service in "${services[@]}"; do
+        run mkdir -p "$config_dir/$service"
+    done
+
+    write_file_if_missing "$stack_dir/.env.example" <<'EOF'
+# Copy this file to .env and edit it before running docker compose.
+PUID=501
+PGID=20
+TZ=America/Denver
+CONFIG_ROOT=./config
+MEDIA_ROOT=/path/to/media/data
+EOF
+
+    write_file_if_missing "$stack_dir/.gitignore" <<'EOF'
+.env
+config/
+EOF
+
+    write_file_if_missing "$stack_dir/compose.yaml" <<'EOF'
+name: media-stack
+
+x-env: &env
+  PUID: ${PUID}
+  PGID: ${PGID}
+  TZ: ${TZ}
+
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/prowlarr:/config
+    ports:
+      - "9696:9696"
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/sonarr:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/radarr:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/lidarr:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "8686:8686"
+    restart: unless-stopped
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/bazarr:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "6767:6767"
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    environment:
+      <<: *env
+      WEBUI_PORT: 8080
+    volumes:
+      - ${CONFIG_ROOT}/qbittorrent:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/sabnzbd:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/tautulli:/config
+    ports:
+      - "8181:8181"
+    restart: unless-stopped
+
+  # Request managers:
+  # Use Overseerr for Plex, or Jellyseerr for Jellyfin.
+  overseerr:
+    image: sctx/overseerr:latest
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/overseerr:/app/config
+    ports:
+      - "5055:5055"
+    restart: unless-stopped
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/jellyseerr:/app/config
+    ports:
+      - "5056:5055"
+    restart: unless-stopped
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    environment: *env
+    volumes:
+      - ${CONFIG_ROOT}/jellyfin:/config
+      - ${MEDIA_ROOT}:/data
+    ports:
+      - "8096:8096"
+    restart: unless-stopped
+
+# VPN note:
+# If you want container-only VPN routing, add Gluetun later and route only
+# the downloader through it. Do not put VPN secrets in this template.
+EOF
+
+    echo
+    echo "Media stack template created at $stack_dir"
+    echo "Next steps:"
+    echo "  cp $stack_dir/.env.example $stack_dir/.env"
+    echo "  edit $stack_dir/.env"
+    echo "  cd $stack_dir && docker compose up -d"
+    echo "No containers were started."
+}
+
 if $DRY_RUN; then
     echo "=== DRY RUN — nothing will be installed or configured ==="
     if ! command -v gum &>/dev/null; then
@@ -696,6 +896,27 @@ select_and_install "Productivity Apps" \
     "cask:stats|n" \
     "cask:vlc|n" \
     "cask:spotify|y"
+
+# Media archival, discovery, and sharing
+if confirm "Install media archival / discovery / sharing tools?" --default=No; then
+    select_and_install "Media Tools" \
+        "cask:mullvad-vpn|n" \
+        "cask:transmission|n" \
+        "cask:plex|n" \
+        "cask:plex-media-server|n" \
+        "cask:jellyfin|n" \
+        "cask:jellyfin-media-player|n" \
+        "cask:sabnzbd|n" \
+        "bazarr|n" \
+        "nzbget|n"
+
+    echo "NOTE: Homebrew currently marks qBittorrent and the Sonarr/Radarr/Lidarr/Prowlarr casks as deprecated for Gatekeeper issues."
+    echo "NOTE: Use Docker/OrbStack or manual downloads for the *arr suite, Readarr, Overseerr, and Tautulli."
+fi
+
+if confirm "Create Docker media stack template?" --default=No; then
+    create_media_stack_template
+fi
 
 # CTF tools, for when you want to get your Mr. Robot on
 if confirm "Install CTF / security tools?" --default=No; then
